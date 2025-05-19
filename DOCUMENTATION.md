@@ -17,7 +17,7 @@
 
 ## Introduction
 
-The Restake Yield Aggregator is an enterprise-grade External Adapter (EA) for Chainlink nodes, designed to provide reliable, statistically validated yield metrics from multiple sources. This document provides an exhaustive technical explanation of its implementation, architecture, and features.
+The Restake Yield Aggregator is an External Adapter (EA) for Chainlink nodes, designed to provide reliable, statistically validated yield metrics from multiple sources. This document provides an exhaustive technical explanation of its implementation, architecture, and features.
 
 ### Purpose and Problem Statement
 
