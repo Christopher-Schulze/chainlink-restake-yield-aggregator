@@ -2,13 +2,12 @@ package otel
 
 import (
 	"context"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
-	"go.opentelemetry.io/otel/sdk/resource"
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.20.0"
 	"time"
+	
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/trace"
 )
 
 func InitTracer(cfg config.Config) func() {
@@ -16,31 +15,31 @@ func InitTracer(cfg config.Config) func() {
 		return func() {}
 	}
 
-	ctx := context.Background()
-	client := otlptracehttp.NewClient(
-		otlptracehttp.WithEndpoint(cfg.OtelEndpoint),
-		otlptracehttp.WithInsecure(),
-	)
-	
-	exporter, err := otlptrace.New(ctx, client)
+	tp, err := InitTracer()
 	if err != nil {
 		return func() {}
 	}
 
+	return func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		Shutdown(ctx)
+	}
+}
+
+func InitTracer() (trace.Tracer, error) {
+	exporter, err := stdouttrace.New(stdouttrace.WithPrettyPrint())
+	if err != nil {
+		return nil, err
+	}
+
 	tp := sdktrace.NewTracerProvider(
 		sdktrace.WithBatcher(exporter),
-		sdktrace.WithResource(resource.NewWithAttributes(
-			semconv.SchemaURL,
-			semconv.ServiceName("restake-yield-ea"),
-		)),
+		sdktrace.WithSampler(sdktrace.AlwaysSample()),
 	)
 	otel.SetTracerProvider(tp)
 
-	return func() {
-		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-		defer cancel()
-		_ = tp.Shutdown(ctx)
-	}
+	return tp.Tracer("restake-yield-ea"), nil
 }
 
 func Tracer() trace.Tracer {
@@ -50,4 +49,11 @@ func Tracer() trace.Tracer {
 func RecordError(ctx context.Context, err error) {
 	span := trace.SpanFromContext(ctx)
 	span.RecordError(err)
+}
+
+func Shutdown(ctx context.Context) error {
+	if tp, ok := otel.GetTracerProvider().(*sdktrace.TracerProvider); ok {
+		return tp.Shutdown(ctx)
+	}
+	return nil
 }

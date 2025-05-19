@@ -53,6 +53,16 @@ func NewDataIntegrityService(opts VerificationOptions) (*DataIntegrityService, e
 	return service, nil
 }
 
+// pad32 adds padding to a byte slice to make it 32 bytes long
+func pad32(b []byte) []byte {
+	if len(b) >= 32 {
+		return b
+	}
+	padded := make([]byte, 32)
+	copy(padded[32-len(b):], b)
+	return padded
+}
+
 // SignPayload adds cryptographic signatures to data payloads
 func (s *DataIntegrityService) SignPayload(payload interface{}) (map[string]interface{}, error) {
 	if !s.verificationOpts.SignatureEnabled {
@@ -82,13 +92,12 @@ func (s *DataIntegrityService) SignPayload(payload interface{}) (map[string]inte
 	hash := sha256.Sum256(payloadBytes)
 
 	// Sign the hash
-	r, s, err := ecdsa.Sign(rand.Reader, s.privateKey, hash[:])
+	signature, err := s.Sign(hash[:])
 	if err != nil {
-		return nil, fmt.Errorf("failed to sign payload: %w", err)
+		return nil, fmt.Errorf("signature generation failed: %w", err)
 	}
 
 	// Convert signature to base64
-	signature := append(r.Bytes(), s.Bytes()...)
 	signatureEncoded := base64.StdEncoding.EncodeToString(signature)
 
 	// Create result with signature metadata
@@ -107,6 +116,16 @@ func (s *DataIntegrityService) SignPayload(payload interface{}) (map[string]inte
 	}
 
 	return resultMap, nil
+}
+
+// Sign signs a byte slice using the private key
+func (s *DataIntegrityService) Sign(data []byte) ([]byte, error) {
+	hash := sha256.Sum256(data)
+	r, s, err := ecdsa.Sign(rand.Reader, s.privateKey, hash[:])
+	if err != nil {
+		return nil, fmt.Errorf("signature failed: %w", err)
+	}
+	return append(pad32(r.Bytes()), pad32(s.Bytes())...), nil
 }
 
 // VerifyPayload verifies the cryptographic signature on data payloads
@@ -194,19 +213,25 @@ func (s *DataIntegrityService) VerifyPayload(signedPayload map[string]interface{
 	}
 	hash := sha256.Sum256(payloadBytes)
 
-	// Extract r and s from signature
-	if len(signatureBytes) != 64 {
-		return false, fmt.Errorf("invalid signature length: %d", len(signatureBytes))
-	}
+	// Verify signature
 	r := new(big.Int).SetBytes(signatureBytes[:32])
 	s := new(big.Int).SetBytes(signatureBytes[32:])
-
-	// Verify signature
 	if !ecdsa.Verify(publicKey, hash[:], r, s) {
-		return false, fmt.Errorf("signature verification failed")
+		return false, fmt.Errorf("cryptographic verification failed")
 	}
 
 	return true, nil
+}
+
+// Verify verifies a signature using the public key
+func (s *DataIntegrityService) Verify(data, signature []byte) bool {
+	if len(signature) != 64 {
+		return false
+	}
+	hash := sha256.Sum256(data)
+	r := new(big.Int).SetBytes(signature[:32])
+	s := new(big.Int).SetBytes(signature[32:])
+	return ecdsa.Verify(&s.privateKey.PublicKey, hash[:], r, s)
 }
 
 // GetPublicKey returns the base64-encoded public key
