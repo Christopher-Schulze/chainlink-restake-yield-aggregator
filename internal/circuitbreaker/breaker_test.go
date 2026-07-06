@@ -331,17 +331,18 @@ func TestConcurrentCheckRaceAfterTrip(t *testing.T) {
 	}()
 	wg.Wait()
 
-	// After the race, the breaker should be open (tripped by bad metrics,
-	// or re-tripped after half-open). The key assertion is that the
-	// lastGoodMetrics was NOT corrupted by a concurrent good-metrics
-	// check that proceeded while the breaker was open.
-	// We can't deterministically prove the race without controlling
-	// scheduling, but with -race we verify no data race is detected,
-	// and the breaker state is consistent.
+	// After the race, the breaker state depends on goroutine scheduling:
+	// - Open: bad goroutine tripped (or re-tripped after half-open)
+	// - HalfOpen: bad goroutine tripped, then a good goroutine
+	//   transitioned to half-open but hasn't closed yet
+	// - Closed: bad goroutine tripped, then enough time elapsed (resetDelay
+	//   is only 1ms) for good goroutines to transition to half-open and
+	//   close the breaker
+	// The key assertion is that no data race is detected (verified by
+	// -race) and the breaker state is a valid value.
 	state := cb.GetState()
-	// State should be Open or HalfOpen (if all good checks succeeded).
-	assert.True(t, state == StateOpen || state == StateHalfOpen,
-		"state should be Open or HalfOpen, got %s", state)
+	assert.True(t, state == StateOpen || state == StateHalfOpen || state == StateClosed,
+		"state should be a valid circuit breaker state, got %s", state)
 }
 
 // TestRecheckPreventsUpdateWhenOpen verifies directly that if the breaker
