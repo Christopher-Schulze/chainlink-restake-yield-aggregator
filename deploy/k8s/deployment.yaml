@@ -1,0 +1,102 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: restake-yield-ea
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: restake-ea-config
+  namespace: restake-yield-ea
+data:
+  PORT: "8080"
+  AGGREGATION_MODE: "weighted"
+  TIMEOUT: "10s"
+  ENABLE_CIRCUIT_BREAKER: "true"
+  ENABLE_VALIDATION: "true"
+  ENABLE_METRICS: "true"
+  MAX_APY_THRESHOLD: "1.0"
+  MAX_TVL_CHANGE: "0.5"
+  MIN_PROVIDERS: "2"
+  CIRCUIT_RESET_DELAY: "5m"
+  MAX_STALE_SECONDS: "300"
+  ENABLE_ENTERPRISE_FEATURES: "true"
+  RATE_LIMIT_RPS: "50"
+  RATE_LIMIT_BURST: "100"
+  LOG_LEVEL: "info"
+  LOG_FORMAT: "json"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: restake-yield-ea
+  namespace: restake-yield-ea
+  labels:
+    app: restake-yield-ea
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: restake-yield-ea
+  template:
+    metadata:
+      labels:
+        app: restake-yield-ea
+    spec:
+      containers:
+        - name: restake-yield-ea
+          image: restake-yield-ea:latest
+          ports:
+            - containerPort: 8080
+              name: http
+          envFrom:
+            - configMapRef:
+                name: restake-ea-config
+          env:
+            - name: SIGNING_PRIVATE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: restake-ea-secrets
+                  key: signing-private-key
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: restake-yield-ea
+  namespace: restake-yield-ea
+spec:
+  selector:
+    app: restake-yield-ea
+  ports:
+    - port: 8080
+      targetPort: 8080
+      name: http
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: restake-ea-secrets
+  namespace: restake-yield-ea
+type: Opaque
+# kubectl create secret generic restake-ea-secrets \
+#   --namespace restake-yield-ea \
+#   --from-literal=signing-private-key=<0x-prefixed hex key>

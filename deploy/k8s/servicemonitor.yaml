@@ -1,0 +1,15 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: restake-yield-ea
+  namespace: restake-yield-ea
+  labels:
+    app: restake-yield-ea
+spec:
+  selector:
+    matchLabels:
+      app: restake-yield-ea
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s

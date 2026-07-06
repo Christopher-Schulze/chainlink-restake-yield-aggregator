@@ -1,0 +1,41 @@
+run:
+  timeout: 120s
+  tests: true
+
+linters:
+  enable:
+    - errcheck
+    - ineffassign
+    - staticcheck
+    - unused
+    - govet
+    - gosec
+    - misspell
+    - unconvert
+    - prealloc
+    - gocritic
+    - revive
+
+linters-settings:
+  errcheck:
+    check-type-assertions: false
+  govet:
+    enable-all: false
+  gosec:
+    excludes:
+      - G104  # unhandled error (checked separately with errcheck)
+  staticcheck:
+    checks: ["all"]
+
+issues:
+  exclude-rules:
+    # Test files may use unchecked writes to ResponseWriters and other
+    # test-only patterns that errcheck flags but are safe in tests.
+    - path: _test\.go
+      linters:
+        - gosec
+        - prealloc
+        - revive
+        - gocritic
+  max-issues-per-linter: 0
+  max-same-issues: 0

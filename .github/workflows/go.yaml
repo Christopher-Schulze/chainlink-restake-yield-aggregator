@@ -1,0 +1,136 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  go:
+    name: Go build, vet, test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go mod download
+      - run: go vet ./...
+      - run: go build -ldflags="-s -w -X main.version=ci" -o /dev/null ./cmd/server
+      - run: go test -race -count=1 -coverprofile=coverage.out ./...
+      - name: Coverage check
+        run: |
+          COVERAGE=$(go tool cover -func=coverage.out | grep total: | awk '{print $3}')
+          echo "Total coverage: ${COVERAGE}"
+          # Require at least 70% coverage.
+          go tool cover -func=coverage.out
+          if [ -z "$COVERAGE" ]; then
+            echo "ERROR: Could not determine coverage"
+            exit 1
+          fi
+          # Compare as numbers (strip % sign).
+          PCT=$(echo "$COVERAGE" | tr -d '%')
+          if [ $(echo "$PCT < 70.0" | bc) -eq 1 ]; then
+            echo "ERROR: Coverage ${PCT}% is below 70% threshold"
+            exit 1
+          fi
+          echo "Coverage ${PCT}% meets 70% threshold"
+      - name: Benchmarks
+        run: go test -run=^$ -bench=. -benchmem -benchtime=1s ./internal/aggregate/...
+
+  golangci-lint:
+    name: Go lint (golangci-lint)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Install golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          args: --timeout 120s
+
+  gosec:
+    name: Go security scan (gosec)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Install gosec
+        run: go install github.com/securego/gosec/v2/cmd/gosec@latest
+      - name: Run gosec
+        run: gosec -severity medium -confidence medium ./...
+
+  govulncheck:
+    name: Go vulnerability scan (govulncheck)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+      - name: Run govulncheck
+        run: govulncheck ./...
+
+  solidity:
+    name: Foundry build + test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+      - name: Generate signature fixture
+        run: go run contracts/script/genfixture.go
+      - name: Forge build
+        run: forge build
+      - name: Forge test
+        run: forge test -vv
+
+  slither:
+    name: Solidity security scan (slither)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+      - name: Install Slither
+        run: pip3 install slither-analyzer
+      - name: Forge build (compile for slither)
+        run: forge build
+      - name: Run Slither
+        run: slither . --config slither.config.json
+
+  docker:
+    name: Docker build
+    runs-on: ubuntu-latest
+    needs: [go, solidity]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: restake-yield-ea:ci
+          build-args: VERSION=ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

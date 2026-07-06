@@ -1,0 +1,23 @@
+.DS_Store
+.idea/
+bin/
+vendor/
+coverage.out
+
+# Foundry
+out/
+cache/
+broadcast/
+lib/
+
+# Generated fixture (regenerate via `go run contracts/script/genfixture.go`)
+contracts/test/fixtures/signature.json
+
+# Go
+*.test
+*.prof
+/server
+
+# Internal task tracking (not for public repo)
+docs/tasks/
+docs/tasks.md

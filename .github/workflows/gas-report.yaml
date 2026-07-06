@@ -1,0 +1,59 @@
+name: Gas Report
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  gas-report:
+    name: Forge Gas Report
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+
+      - name: Generate signature fixture
+        run: go run contracts/script/genfixture.go
+
+      - name: Build contracts
+        run: forge build
+
+      - name: Run gas report
+        run: forge test --gas-report
+
+      - name: Generate gas report file
+        run: forge test --gas-report > gas-report.txt
+
+      - name: Upload gas report
+        uses: actions/upload-artifact@v4
+        with:
+          name: gas-report
+          path: gas-report.txt
+          retention-days: 30
+
+      - name: Comment gas report on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('gas-report.txt', 'utf8');
+            const body = `## Gas Report\n\n\`\`\`\n${report}\n\`\`\``;
+            github.rest.issues.createComment({
+              ...context.repo,
+              issue_number: context.issue.number,
+              body
+            });
