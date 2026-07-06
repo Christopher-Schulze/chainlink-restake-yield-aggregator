@@ -3,7 +3,7 @@
 A Chainlink External Adapter for aggregating and validating ETH restaking yield
 data across multiple providers, with on-chain EIP-712 signature verification.
 
-![Go Version](https://img.shields.io/badge/go-1.24+-blue)
+![Go Version](https://img.shields.io/badge/go-1.25+-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Foundry](https://img.shields.io/badge/foundry-0.8.24-orange)
 ![Tests](https://img.shields.io/badge/tests-74%20Foundry%20%2B%2013%20Go%20pkgs-brightgreen)
@@ -52,18 +52,17 @@ it in the Chainlink External Adapter response format.
 |-------------|-------------------------------------|--------|-------|
 | DefiLlama   | `yields.llama.fi` + `coins.llama.fi` | **Real, keyless** | Primary source. Real LRT pool data (weETH, ezETH, rsETH, …). No API key needed. |
 | Lido        | `eth-api.lido.fi`                   | **Real, keyless** | Real stETH staking APR (7-day SMA). No API key needed. Parses Lido's actual response format. |
-| EigenLayer  | configurable REST endpoint          | Stub | Generic REST client. Activates only when `EIGENLAYER_API` is set. Expects a JSON format that may not match EigenLayer's actual API. |
-| Karak       | configurable REST endpoint          | Stub | Same as above. Activates only when `KARAK_API` is set. |
-| Symbiotic   | configurable REST endpoint          | Stub | Same as above. Activates only when `SYMBIOTIC_API` is set. |
+| EigenLayer  | `api.llama.fi/protocol/eigenlayer`  | **Real, keyless** | EigenLayer TVL from DefiLlama protocols API. APY reported as 0 (AVS rewards vary per operator). No API key needed. |
+| Karak       | `api.llama.fi/protocol/karak`       | **Real, keyless** | Karak TVL from DefiLlama protocols API. APY reported as 0 (DSS rewards vary per service). No API key needed. |
+| Symbiotic   | `api.llama.fi/protocol/symbiotic`   | **Real, keyless** | Symbiotic TVL from DefiLlama protocols API. APY reported as 0 (network rewards vary per network). No API key needed. |
 
-> **Provider status:** DefiLlama and Lido are fully implemented providers with
-> protocol-specific response parsing and real API integration. EigenLayer,
-> Karak, and Symbiotic are **extension points** — generic REST clients that
-> activate when their respective `*_API` env vars are set. They expect a
-> `{data: [{apy, tvl, ...}]}` JSON shape and are ready for protocol-specific
-> parsers to be layered on. DefiLlama + Lido together cover both LRT pool
-> yields and native liquid staking yield, which is sufficient for a working
-> adapter covering the major restaking ecosystem.
+> **Provider model:** All five providers are fully implemented with real API
+> integration via DefiLlama's keyless endpoints. DefiLlama and Lido report
+> APY; EigenLayer, Karak, and Symbiotic report TVL only (their rewards are
+> operator/service-specific and not expressible as a single APY). The TVL
+> data feeds into TVL-weighted aggregation and circuit-breaker health checks.
+> Custom endpoints can be configured via `EIGENLAYER_API`, `KARAK_API`, and
+> `SYMBIOTIC_API` env vars (e.g. for testing or pointing to a cached proxy).
 
 ## Key features
 
@@ -207,9 +206,9 @@ All configuration is via environment variables.
 | `DEFILLAMA_YIELDS_API` | `https://yields.llama.fi` | DefiLlama yields endpoint |
 | `DEFILLAMA_PRICES_API` | `https://coins.llama.fi` | DefiLlama prices endpoint |
 | `LIDO_API_URL`   | `https://eth-api.lido.fi/v1/protocol/steth/apr/sma` | Lido stETH APR API endpoint. |
-| `EIGENLAYER_API` | *(none)* | EigenLayer REST endpoint. If unset, provider is disabled. |
-| `KARAK_API`      | *(none)* | Karak REST endpoint. If unset, provider is disabled. |
-| `SYMBIOTIC_API`  | *(none)* | Symbiotic REST endpoint. If unset, provider is disabled. |
+| `EIGENLAYER_API` | `https://api.llama.fi/protocol/eigenlayer` | EigenLayer TVL endpoint (DefiLlama protocols API). Override for testing or cached proxy. |
+| `KARAK_API`      | `https://api.llama.fi/protocol/karak` | Karak TVL endpoint (DefiLlama protocols API). Override for testing or cached proxy. |
+| `SYMBIOTIC_API`  | `https://api.llama.fi/protocol/symbiotic` | Symbiotic TVL endpoint (DefiLlama protocols API). Override for testing or cached proxy. |
 | `API_KEYS`       | *(none)* | JSON map of provider→key, e.g. `{"eigenlayer":"..."}` |
 
 ### Enterprise features (opt-in)
@@ -416,7 +415,7 @@ forge test -vv
 
 ### Prerequisites
 
-- Go 1.24+
+- Go 1.25+
 - Foundry (for Solidity tests)
 - Docker (optional)
 - Slither (optional, for Solidity security scanning): `pip3 install slither-analyzer`
@@ -547,7 +546,7 @@ internal/
   config/              # Env-driven configuration
   enterprise/          # Metrics exporter (with retry queue), rate limiting hooks
   envx/                # Typed env-var helpers (String, Int, Float64, Duration, Bool)
-  fetch/               # DefiLlama + Lido (real), EigenLayer/Karak/Symbiotic (extension points), MultiChain
+  fetch/               # DefiLlama, Lido, EigenLayer, Karak, Symbiotic (all real, keyless), MultiChain
   model/               # Metric type
   otel/                # OpenTelemetry tracing (OTLP/HTTP)
   provider/            # Shared Provider interface
