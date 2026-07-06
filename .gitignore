@@ -11,7 +11,7 @@ broadcast/
 lib/
 
 # Generated fixture (regenerate via `go run contracts/script/genfixture.go`)
-contracts/test/fixtures/signature.json
+contracts/test/fixtures/eip712_signature.json
 
 # Go
 *.test

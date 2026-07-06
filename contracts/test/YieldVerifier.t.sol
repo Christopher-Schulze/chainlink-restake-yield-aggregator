@@ -20,7 +20,7 @@ contract YieldVerifierTest is Test {
     /// @dev Reads the Go-generated fixture and asserts the contract accepts it.
     function test_VerifyGoGeneratedFixture() public {
         string memory root = vm.projectRoot();
-        string memory path = string.concat(root, "/contracts/test/fixtures/signature.json");
+        string memory path = string.concat(root, "/contracts/test/fixtures/eip712_signature.json");
         string memory json = vm.readFile(path);
 
         bytes32 digest = stdJson.readBytes32(json, ".digest");
@@ -72,7 +72,7 @@ contract YieldVerifierTest is Test {
 
     function test_RevertOnTamperedDigest() public {
         string memory root = vm.projectRoot();
-        string memory path = string.concat(root, "/contracts/test/fixtures/signature.json");
+        string memory path = string.concat(root, "/contracts/test/fixtures/eip712_signature.json");
         string memory json = vm.readFile(path);
         bytes32 digest = stdJson.readBytes32(json, ".digest");
         bytes memory signature = stdJson.readBytes(json, ".signature");
